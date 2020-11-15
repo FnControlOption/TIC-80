@@ -32,7 +32,6 @@
 #include "api.h"
 #include "defines.h"
 #include "tools.h"
-#include "ext/file_dialog.h"
 #include "system.h"
 
 #define TIC_LOCAL ".local/"

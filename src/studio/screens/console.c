@@ -24,7 +24,6 @@
 #include "studio/fs.h"
 #include "studio/config.h"
 #include "ext/gif.h"
-#include "ext/file_dialog.h"
 #include "studio/project.h"
 
 #include <ctype.h>
@@ -86,7 +85,6 @@ typedef enum
 #if defined(__TIC_WINDOWS__) || defined(__TIC_LINUX__) || defined(__TIC_MACOSX__)
 #define CAN_EXPORT 1
 #define CAN_EXPORT_NATIVE 1
-#define CAN_OPEN_URL 1
 #define CAN_OPEN_FOLDER 1
 #endif
 
@@ -356,14 +354,6 @@ static void processConsoleBackspace(Console* console)
 }
 
 static void onConsoleHelpCommand(Console* console, const char* param);
-
-#if defined(CAN_OPEN_URL)
-static void onConsoleWikiCommand(Console* console, const char* param)
-{
-    getSystem()->openSystemPath("https://github.com/nesbox/TIC-80/wiki");
-    commandDone(console);
-}
-#endif
 
 static void onConsoleExitCommand(Console* console, const char* param)
 {
@@ -1304,18 +1294,6 @@ static void onConsoleConfigCommand(Console* console, const char* param)
     commandDone(console);
 }
 
-static void onFileDownloaded(GetResult result, void* data)
-{
-    Console* console = (Console*)data;
-
-    if(result == FS_FILE_NOT_DOWNLOADED)
-        printBack(console, "\nfile not downloaded :|");
-    else if (result == FS_FILE_DOWNLOADED)
-        printBack(console, "\nfile downloaded :)");
-
-    commandDone(console);
-}
-
 static void onImportCover(const char* name, const void* buffer, s32 size, void* data)
 {
     Console* console = (Console*)data;
@@ -1447,41 +1425,29 @@ static void onConsoleImportCommand(Console* console, const char* param)
         commandDone(console);
     }
     else if(strcmp(param, "sprites") == 0)
-        fsOpenFileData(onImportSprites, console);
+    {
+        s32 size = 0;
+        const void* data = fsLoadFile(console->fs, "sprites.gif", &size);
+        onImportSprites("sprites.gif", data, size, console);
+    }
     else if(strcmp(param, "map") == 0)
-        fsOpenFileData(onImportMap, console);
+    {
+        s32 size = 0;
+        const void* data = fsLoadFile(console->fs, "map.dat", &size);
+        onImportMap("map.dat", data, size, console);
+    }
     else if(strcmp(param, "cover") == 0)
-        fsOpenFileData(onImportCover, console);
+    {
+        s32 size = 0;
+        const void* data = fsLoadFile(console->fs, "cover.gif", &size);
+        onImportCover("cover.gif", fsLoadFile(console->fs, "cover.gif", &size), size, console);
+    }
     else
     {
         printError(console, "\nunknown parameter: ");
         printError(console, param);
         commandDone(console);
     }
-}
-
-static void onSpritesExported(GetResult result, void* data)
-{
-    Console* console = (Console*)data;
-
-    if(result == FS_FILE_NOT_DOWNLOADED)
-        printBack(console, "\nsprites not exported :|");
-    else if (result == FS_FILE_DOWNLOADED)
-        printBack(console, "\nsprites successfully exported :)");
-
-    commandDone(console);
-}
-
-static void onCoverExported(GetResult result, void* data)
-{
-    Console* console = (Console*)data;
-
-    if(result == FS_FILE_NOT_DOWNLOADED)
-        printBack(console, "\ncover image not exported :|");
-    else if (result == FS_FILE_DOWNLOADED)
-        printBack(console, "\ncover image successfully exported :)");
-
-    commandDone(console);
 }
 
 static void exportCover(Console* console)
@@ -1494,7 +1460,9 @@ static void exportCover(Console* console)
         if (data)
         {
             memcpy(data, cover->data, cover->size);
-            fsGetFileData(onCoverExported, "cover.gif", data, cover->size, DEFAULT_CHMOD, console);
+            fsSaveFile(console->fs, "cover.gif", data, cover->size, true);
+            printBack(console, "\ncover image successfully exported :)");
+            commandDone(console);
         }
         else
             printMemoryError(console);
@@ -1517,7 +1485,9 @@ static void exportSfx(Console* console, s32 sfx)
     {
         char name[TICNAME_MAX];
         sprintf(name, "sfx %i.wav", sfx);
-        fsGetFileData(onFileDownloaded, name, data, size, DEFAULT_CHMOD, console);
+        fsSaveFile(console->fs, name, data, size, true);
+        printBack(console, "\nsfx.wav exported :)");
+        commandDone(console);
     }
     else
     {
@@ -1537,7 +1507,9 @@ static void exportMusic(Console* console, s32 track)
     {
         char name[TICNAME_MAX];
         sprintf(name, "track %i.wav", track);
-        fsGetFileData(onFileDownloaded, name, data, size, DEFAULT_CHMOD, console);
+        fsSaveFile(console->fs, name, data, size, true);
+        printBack(console, "\ntrack.wav exported :)");
+        commandDone(console);
     }
     else
     {
@@ -1570,8 +1542,10 @@ static void exportSprites(Console* console)
             s32 size = 0;
             if((size = writeGifData(console->tic, buffer, data, Width, Height)))
             {
-                // buffer will be freed inside fsGetFileData
-                fsGetFileData(onSpritesExported, "sprites.gif", buffer, size, DEFAULT_CHMOD, console);
+                // buffer will be freed inside // fsGetFileData
+                fsSaveFile(console->fs, "sprites.gif", buffer, size, true);
+                printBack(console, "\nsprites.gif exported :)");
+                commandDone(console);
             }
             else
             {
@@ -1585,18 +1559,6 @@ static void exportSprites(Console* console)
     }
 }
 
-static void onMapExported(GetResult result, void* data)
-{
-    Console* console = (Console*)data;
-
-    if(result == FS_FILE_NOT_DOWNLOADED)
-        printBack(console, "\nmap not exported :|");
-    else if (result == FS_FILE_DOWNLOADED)
-        printBack(console, "\nmap successfully exported :)");
-
-    commandDone(console);
-}
-
 static void exportMap(Console* console)
 {
     enum{Size = sizeof(tic_map)};
@@ -1606,7 +1568,9 @@ static void exportMap(Console* console)
     if(buffer)
     {
         memcpy(buffer, getBankMap()->data, Size);
-        fsGetFileData(onMapExported, "world.map", buffer, Size, DEFAULT_CHMOD, console);
+        fsSaveFile(console->fs, "world.map", buffer, Size, true);
+        printBack(console, "\nworld.map exported :)");
+        commandDone(console);
     }
 }
 
@@ -1722,11 +1686,9 @@ static void onConsoleExportNativeCommand(Console* console, const char* cartName)
 
     if(data)
     {
-        fsGetFileData(onFileDownloaded, cartName, data, size, DEFAULT_CHMOD, console);
-    }
-    else
-    {
-        onFileDownloaded(FS_FILE_NOT_DOWNLOADED, console);
+        fsSaveFile(console->fs, cartName, data, size, true);
+        printBack(console, "\ngame.exe exported :)");
+        commandDone(console);
     }
 }
 
@@ -1862,24 +1824,28 @@ static void onConsoleExportHtmlCommand(Console* console, const char* providedNam
             {
                 if(fsExists(providedName))
                 {
-                    printError(console, "\nfile already exists");
+                    printError(console, "\n" HTML_EXPORT_NAME " already exists");
                     commandDone(console);
                     return;
                 }
                 else if (fsWriteFile(providedName, data, sizeof(data)))
                 {
-                    onFileDownloaded(FS_FILE_DOWNLOADED, console);
+                    printBack(console, "\n" HTML_EXPORT_NAME " exported :)");
+                    commandDone(console);
                     return;
                 }
                 else
                 {
-                    onFileDownloaded(FS_FILE_NOT_DOWNLOADED, console);
+                    printBack(console, "\n" HTML_EXPORT_NAME " not exported :(");
+                    commandDone(console);
                     return;
                 }
             }
             else if(data)
             {
-                fsGetFileData(onFileDownloaded, getExportName(console, ".zip"), data, size, DEFAULT_CHMOD, console);
+                fsSaveFile(console->fs, getExportName(console, ".zip"), data, size, true);
+                printBack(console, "\n" HTML_EXPORT_NAME " exported :)");
+                commandDone(console);                
                 return;
             }
             else errorOccured = true;
@@ -2126,49 +2092,6 @@ static void onConsoleEvalCommand(Console* console, const char* param)
     commandDone(console);
 }
 
-static void onAddFile(const char* name, AddResult result, void* data)
-{
-    Console* console = (Console*)data;
-
-    printLine(console);
-
-    switch(result)
-    {
-    case FS_FILE_EXISTS:
-        printBack(console, "file ");
-        printFront(console, name);
-        printBack(console, " already exists :|");
-        break;
-    case FS_FILE_ADDED:
-        printBack(console, "file ");
-        printFront(console, name);
-        printBack(console, " is successfully added :)");
-        break;
-    default:
-        printBack(console, "file not added :(");
-        break;
-    }
-
-    commandDone(console);
-}
-
-static void onConsoleAddCommand(Console* console, const char* param)
-{
-    fsAddFile(console->fs, onAddFile, console);
-}
-
-static void onConsoleGetCommand(Console* console, const char* param)
-{
-    if(param)
-    {
-        fsGetFile(console->fs, onFileDownloaded, param, console);
-        return;
-    }
-    else printBack(console, "\nfile name is missing");
-
-    commandDone(console);
-}
-
 static void onConsoleDelCommandConfirmed(Console* console, const char* param)
 {
     if(param && strlen(param))
@@ -2344,9 +2267,6 @@ static const struct
 } AvailableConsoleCommands[] =
 {
     {"help",    NULL, "show this info",             onConsoleHelpCommand},
-#if defined(CAN_OPEN_URL)
-    {"wiki",    NULL, "open github wiki page",      onConsoleWikiCommand},
-#endif
     {"ram",     NULL, "show 80K RAM layout",        onConsoleRamCommand},
     {"vram",    NULL, "show 16K VRAM layout",       onConsoleVRamCommand},
     {"exit",    "quit", "exit the application",     onConsoleExitCommand},
@@ -2362,8 +2282,6 @@ static const struct
 #if defined(CAN_OPEN_FOLDER)
     {"folder",  NULL, "open working folder in OS",  onConsoleFolderCommand},
 #endif
-    {"add",     NULL, "add file",                   onConsoleAddCommand},
-    {"get",     NULL, "download file",              onConsoleGetCommand},
     {"export",  NULL, "export native game",         onConsoleExportCommand},
     {"import",  NULL, "import sprites from .gif",   onConsoleImportCommand},
     {"del",     NULL, "delete file or dir",         onConsoleDelCommand},

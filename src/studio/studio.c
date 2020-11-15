@@ -1416,14 +1416,6 @@ static void setCoverImage()
     }
 }
 
-static void onVideoExported(GetResult result, void* data)
-{
-    if(result == FS_FILE_NOT_DOWNLOADED)
-        showPopupMessage("GIF NOT EXPORTED :|");
-    else if (result == FS_FILE_DOWNLOADED)
-        showPopupMessage("GIF EXPORTED :)");
-}
-
 static void stopVideoRecord()
 {
     if(impl.video.buffer)
@@ -1434,7 +1426,9 @@ static void stopVideoRecord()
 
             gif_write_animation(data, &size, TIC80_FULLWIDTH, TIC80_FULLHEIGHT, (const u8*)impl.video.buffer, impl.video.frame, TIC80_FRAMERATE, getConfig()->gifScale);
 
-            fsGetFileData(onVideoExported, "screen.gif", data, size, DEFAULT_CHMOD, NULL);
+            fsSaveRootFile(impl.fs, "screen.gif", data, size, true);
+
+            showPopupMessage("SCREEN.GIF SAVED :)");
         }
 
         free(impl.video.buffer);
