@@ -821,7 +821,7 @@ if(BUILD_SDL)
     endif()
 
     if(EMSCRIPTEN)
-        set_target_properties(tic80 PROPERTIES LINK_FLAGS "-s WASM=1 -s USE_SDL=2 -s TOTAL_MEMORY=67108864 --pre-js -lidbfs.js")
+        set_target_properties(tic80 PROPERTIES LINK_FLAGS "-s WASM=1 -s USE_SDL=2 -s TOTAL_MEMORY=67108864 -lidbfs.js")
         set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -s USE_SDL=2")
 
         if(CMAKE_BUILD_TYPE STREQUAL "Debug")

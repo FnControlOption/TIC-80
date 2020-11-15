@@ -1644,7 +1644,7 @@ static void* embedCart(Console* console, s32* size)
 
             if(zipData)
             {
-                if(zipSize = tic_tool_zip(zipData, zipSize, cart, cartSize))
+                if((zipSize = tic_tool_zip(zipData, zipSize, cart, cartSize)))
                 {
                     EmbedHeader header = 
                     {
